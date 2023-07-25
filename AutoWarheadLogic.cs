@@ -34,14 +34,20 @@ namespace AutoWarhead {
         private static Timer _warheadTimer;
 
         public static void Init() {
-            ServerEventType.RoundRestart.AddHandler<Action>(Prepare);
-            Prepare();
+            _warningTimer = new Timer();
+            _warningTimer.Elapsed += AutoWarheadWarningEvent;
+            _warningTimer.AutoReset = false;
+            _warheadTimer = new Timer();
+            _warheadTimer.Elapsed += AutoWarheadStartEvent;
+            _warheadTimer.AutoReset = false;
+
+            ServerEventType.RoundRestart.AddHandler<Action>(RestartPrepare);
+            RestartPrepare();
         }
 
         public static bool IsEnabled {
             get => _isEnabled;
             set {
-                //Log.Info(value.ToString());
                 if (value == _isEnabled)
                     return;
 
@@ -57,7 +63,7 @@ namespace AutoWarhead {
                     }
                     ServerEventType.RoundStart.RemoveHandler<Action>(StartTimers);
 
-                    Log.Info($"Auto Warhead disabled.");
+                    FLog.Info($"Auto Warhead disabled.");
                 } else {
                     _isEnabled = true;
 
@@ -68,7 +74,7 @@ namespace AutoWarhead {
                     ServerEventType.RoundStart.AddHandler<Action>(StartTimers);
 
                     if (IsRoundStarted()) StartTimers();
-                    Log.Info($"Auto Warhead enabled.");
+                    FLog.Info($"Auto Warhead enabled.");
                 }
             }
         }
@@ -103,7 +109,7 @@ namespace AutoWarhead {
         public static bool WarningEnabled { get; set; } = true;
 
         [IniConfig(Name = "Warning Message", Description = "Warning message to C.A.S.S.I.E before Auto Warhead activation.")]
-        public static string WarningMessage { get; set; } = "pitch_.2 .g4.g4 pitch_1.Facility diagnostic anomaly detected. .g2 o 5password accepted .g3.automatic warhead detonation sequence authorized pitch_.9 .g3.pitch_1 detonation tminus 90 seconds.all personnel evacuate pitch_.8 . .g1. .g1. .g1 pitch_1 bell_end";
+        public static string WarningMessage { get; set; } = "pitch_.2 .g4 .g4 pitch_1. Facility diagnostic anomaly detected . .g2 o 5 password accepted . .g3 automatic warhead detonation sequence authorized pitch_.9 .g3 pitch_1 detonation tminus 90 seconds . all personnel evacuate pitch_.8 . .g1 . .g1 . .g1 pitch_1 bell_end";
 
         [IniConfig(Name = "Announce before", Description = "Time of C.A.S.S.I.E warning message announce. (minutes) [Default: 23.25]")]
         public static double WarningTime { get; set; } = 23.25;
@@ -114,14 +120,6 @@ namespace AutoWarhead {
         [IniConfig(Name = "Start After", Description = "Automatic Alpha Warhead start time (minutes) [Default: 25]")]
         public static double StartAfter { get; set; } = 25;
 
-        public static void TimersInit() {
-            _warningTimer = new Timer();
-            _warningTimer.Elapsed += AutoWarheadWarningEvent;
-            _warningTimer.AutoReset = false;
-            _warheadTimer = new Timer();
-            _warheadTimer.Elapsed += AutoWarheadStartEvent;
-            _warheadTimer.AutoReset = false;
-        }
 
         private static void StartTimers() {
             double interval = StartAfter * 60 * 1000 - Round.Duration.TotalMilliseconds;
@@ -142,17 +140,20 @@ namespace AutoWarhead {
         }
 
         private static void AutoWarheadStart() {
-            if (Warhead.IsDetonated || _isDetonating) return;
+            if (Warhead.IsDetonated || _isDetonating || !IsEnabled) return;
+            bool isSCP079InGame = !Scp079Role.ActiveInstances.IsEmpty();
             string broadcastMessage;
             if (Warhead.IsDetonationInProgress) {
                 broadcastMessage = AutoWarheadMessageOnContinue;
-                broadcastMessage += " " + (SCP079RegularSurvive ? SCP079SurviveMessage : SCP079DieMessage);
-                Log.Info("Automatic Alpha Warhead continuing on regular warhead detonation");
+                if (isSCP079InGame)
+                    broadcastMessage += " " + (SCP079RegularSurvive ? SCP079SurviveMessage : SCP079DieMessage);
+                FLog.Info("Automatic Alpha Warhead continuing on regular warhead detonation");
             } else {
                 broadcastMessage = AutoWarheadMessage;
-                broadcastMessage += " " + (SCP079AutoSurvive ? SCP079SurviveMessage : SCP079DieMessage);
+                if (isSCP079InGame)
+                    broadcastMessage += " " + (SCP079AutoSurvive ? SCP079SurviveMessage : SCP079DieMessage);
                 Warhead.Start(false, true);
-                Log.Info("Automatic Alpha Warhead start");
+                FLog.Info("Automatic Alpha Warhead start");
                 _isDetonating = true;
             }
             Warhead.IsLocked = true;
@@ -166,14 +167,15 @@ namespace AutoWarhead {
             if (Warhead.IsDetonated || !_isDetonating) return;
             _isDetonating = false;
             Warhead.Stop();
-            Log.Info("Automatic Alpha Warhead stopped");
+            FLog.Info("Automatic Alpha Warhead stopped");
         }
 
-        public static void Prepare() {
+        public static void RestartPrepare() {
             _isDetonating = false;
             IsEnabled = DefaultEnabled;
-            if(IsEnabled) {
-                TimersInit();
+            if (IsEnabled) {
+                _warningTimer.Stop();
+                _warheadTimer.Stop();
             }
         }
 
@@ -191,6 +193,7 @@ namespace AutoWarhead {
         }
 
         private static void AutoWarheadStartEvent(Object source, ElapsedEventArgs e) {
+            if (StartAfter > Round.Duration.TotalMinutes + 0.02) return;
             AutoWarheadStart();
         }
 

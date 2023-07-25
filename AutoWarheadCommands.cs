@@ -24,7 +24,8 @@ namespace AutoWarhead {
                 "Automatic Warhead enabled." :
                 "Automatic Warhead disabled.";
         }
-        /*
+
+        /* CHANGE TIME - not supported
         [Command("autowarheadtime", CommandType.RemoteAdmin, CommandType.GameConsole)]
         [CommandAliases("autowtime", "autowt")]
         [Description("Change time of Automatic Alpha Warhead (in minutes)")]
@@ -54,7 +55,11 @@ namespace AutoWarhead {
             string warhead = $"Auto Warhead time set to {FormatTime(AutoWarheadLogic.StartAfter)}.";
             if (Warhead.IsDetonated) warhead += " Is detonated.";
             else if (AutoWarheadLogic.IsDetonating) warhead += " Is being detonated.";
-            else if (AutoWarheadLogic.IsRoundStarted()) warhead += $" Remaining {FormatTime(AutoWarheadLogic.StartAfter - Round.Duration.TotalMinutes)}.";
+            else if (AutoWarheadLogic.IsRoundStarted() && AutoWarheadLogic.IsEnabled) {
+                double time = AutoWarheadLogic.StartAfter - Round.Duration.TotalMinutes;
+                if (time < 0) warhead += " Already detonated.";
+                else warhead += $" Remaining {FormatTime(time)}.";
+            }
             sb.AppendLine(warhead);
 
             if (!AutoWarheadLogic.IsEnabled) sb.AppendLine($"PLUGIN IS NOT ACTIVE!");

@@ -1,35 +1,17 @@
-﻿//using helpers;
+﻿using System.Collections.Generic;
+
 using helpers.Patching;
 using Mirror;
 using Interactables.Interobjects.DoorUtils;
-
-using PluginAPI.Events;
-using PlayerRoles;
-
-using UnityEngine;
-using PlayerRoles.PlayableScps.Scp079;
-using System;
+using Compendium.Features;
 using Interactables.Interobjects;
+using PlayerRoles.PlayableScps.Scp079;
 using PlayerRoles.PlayableScps.Scp079.Cameras;
-using System.Collections.Generic;
-using helpers.Extensions;
-using InventorySystem.Items.Usables.Scp244;
-using LightContainmentZoneDecontamination;
-using PlayerRoles.FirstPersonControl;
-using PlayerStatsSystem;
-using PluginAPI.Core;
-using Respawning;
 
 namespace AutoWarhead {
-    public abstract class AutoWarheadPatch {
+    public static class AutoWarheadPatch {
 
-        public static readonly PatchInfo patch = new PatchInfo(
-            new PatchTarget(typeof(Scp079DoorAbility), nameof(Scp079DoorAbility.ValidateAction)),
-            new PatchTarget(typeof(AutoWarheadPatch), nameof(AutoWarheadPatch.DoorPatch)), PatchType.Prefix, "SCP-079 door patch");
-        public static readonly PatchInfo patch2 = new PatchInfo(
-            new PatchTarget(typeof(AlphaWarheadController), nameof(AlphaWarheadController.Detonate)),
-            new PatchTarget(typeof(AutoWarheadPatch), nameof(AutoWarheadPatch.CameraChange)), PatchType.Prefix, "SCP-079 Camera change");
-
+        [Patch(typeof(Scp079DoorAbility), nameof(Scp079DoorAbility.ValidateAction), PatchType.Prefix, "SCP-079 door patch")]
         public static bool DoorPatch(ref bool __result, DoorAction action, DoorVariant door, Scp079Camera currentCamera) {
             if (!Scp079DoorAbility.CheckVisibility(door, currentCamera)) {
                 __result = false;
@@ -68,13 +50,14 @@ namespace AutoWarhead {
             return false;
         }
 
+        [Patch(typeof(AlphaWarheadController), nameof(AlphaWarheadController.Detonate), PatchType.Prefix, "SCP-079 Camera change")]
         public static bool CameraChange() {
             List<Scp079Camera> surfaceCameras = new List<Scp079Camera>();
             foreach (Scp079InteractableBase scp079InteractableBase in Scp079InteractableBase.AllInstances) {
                 Scp079Camera scp079Camera = scp079InteractableBase as Scp079Camera;
                 if (scp079Camera != null && scp079Camera.Room.Zone == MapGeneration.FacilityZone.Surface) {
                     surfaceCameras.Add(scp079Camera);
-                    //Log.Info($"Camera: {scp079Camera.name}");
+                    //FLog.Info($"Camera: {scp079Camera.name}");
                 }
             }
             if (surfaceCameras.Count < 1) return true;
