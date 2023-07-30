@@ -8,7 +8,6 @@ namespace AutoWarhead {
         public override bool IsPatch => true;
 
         public override void Load() {
-            Harmony.DEBUG = true;
             base.Load();
             AutoWarheadLogic.Init();
         }

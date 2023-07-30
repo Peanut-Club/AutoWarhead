@@ -57,7 +57,6 @@ namespace AutoWarhead {
                 Scp079Camera scp079Camera = scp079InteractableBase as Scp079Camera;
                 if (scp079Camera != null && scp079Camera.Room.Zone == MapGeneration.FacilityZone.Surface) {
                     surfaceCameras.Add(scp079Camera);
-                    //FLog.Info($"Camera: {scp079Camera.name}");
                 }
             }
             if (surfaceCameras.Count < 1) return true;

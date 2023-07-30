@@ -1,7 +1,6 @@
 ﻿using Compendium.Extensions;
 using Compendium.Features;
-using Compendium.Helpers.Calls;
-using Compendium.Helpers.Events;
+using Compendium.Events;
 
 //using helpers;
 using helpers.Configuration.Ini;
@@ -25,11 +24,15 @@ using Mirror;
 using PlayerRoles.PlayableScps.Scp079.Map;
 using PlayerRoles.PlayableScps.Scp079.Cameras;
 using PluginAPI.Core.Zones;
+using Compendium.Round;
+using helpers;
+using System.Reflection;
 
 namespace AutoWarhead {
     public static class AutoWarheadLogic {
         private static bool _isEnabled;
         private static bool _isDetonating = false; // true only if automatic warhead started by itself
+        private static bool _079EventsRegistered = true;
         private static Timer _warningTimer;
         private static Timer _warheadTimer;
 
@@ -41,7 +44,6 @@ namespace AutoWarhead {
             _warheadTimer.Elapsed += AutoWarheadStartEvent;
             _warheadTimer.AutoReset = false;
 
-            ServerEventType.RoundRestart.AddHandler<Action>(RestartPrepare);
             RestartPrepare();
         }
 
@@ -57,21 +59,13 @@ namespace AutoWarhead {
                     _warningTimer.Stop();
                     AutoWarheadStop();
 
-                    if (SCP079RegularSurvive || SCP079AutoSurvive) {
-                        ServerEventType.PlayerDamage.RemoveHandler<Action<PlayerDamageEvent, ValueContainer>>(OnPlayerDamage);
-                        ServerEventType.Scp079CameraChanged.RemoveHandler<Action<Scp079CameraChangedEvent, ValueContainer>>(CameraChangeCheck);
-                    }
-                    ServerEventType.RoundStart.RemoveHandler<Action>(StartTimers);
+                    EventRegistry.UnregisterEvents(Reflection.Method(typeof(AutoWarheadLogic), nameof(AutoWarheadLogic.StartTimers)));
 
                     FLog.Info($"Auto Warhead disabled.");
                 } else {
                     _isEnabled = true;
 
-                    if (SCP079RegularSurvive || SCP079AutoSurvive) {
-                        ServerEventType.PlayerDamage.AddHandler<Action<PlayerDamageEvent, ValueContainer>>(OnPlayerDamage);
-                        ServerEventType.Scp079CameraChanged.AddHandler<Action<Scp079CameraChangedEvent, ValueContainer>>(CameraChangeCheck);
-                    }
-                    ServerEventType.RoundStart.AddHandler<Action>(StartTimers);
+                    EventRegistry.RegisterEvents(Reflection.Method(typeof(AutoWarheadLogic), nameof(AutoWarheadLogic.StartTimers)));
 
                     if (IsRoundStarted()) StartTimers();
                     FLog.Info($"Auto Warhead enabled.");
@@ -120,8 +114,37 @@ namespace AutoWarhead {
         [IniConfig(Name = "Start After", Description = "Automatic Alpha Warhead start time (minutes) [Default: 25]")]
         public static double StartAfter { get; set; } = 25;
 
+        [RoundStateChanged(RoundState.Restarting)]
+        public static void RestartPrepare() {
+            _isDetonating = false;
+            IsEnabled = DefaultEnabled;
+            if (IsEnabled) {
+                _warningTimer.Stop();
+                _warheadTimer.Stop();
+            }
+        }
 
+        [RoundStateChanged(RoundState.WaitingForPlayers)]
+        private static void UnregisterOnStart() {
+            if (_079EventsRegistered && (SCP079RegularSurvive || SCP079AutoSurvive)) {
+                EventRegistry.UnregisterEvents(Reflection.Method(typeof(AutoWarheadLogic), nameof(AutoWarheadLogic.OnPlayerDamage)));
+                EventRegistry.UnregisterEvents(Reflection.Method(typeof(AutoWarheadLogic), nameof(AutoWarheadLogic.CameraChangeCheck)));
+                _079EventsRegistered = false;
+            }
+        }
+
+        [Event(ServerEventType.WarheadDetonation)]
+        private static void OnDetonate() {
+            if (!_079EventsRegistered && (SCP079RegularSurvive || SCP079AutoSurvive)) {
+                EventRegistry.RegisterEvents(Reflection.Method(typeof(AutoWarheadLogic), nameof(AutoWarheadLogic.OnPlayerDamage)));
+                EventRegistry.RegisterEvents(Reflection.Method(typeof(AutoWarheadLogic), nameof(AutoWarheadLogic.CameraChangeCheck)));
+                _079EventsRegistered = true;
+            }
+        }
+
+        [Event(ServerEventType.RoundStart)]
         private static void StartTimers() {
+            FLog.Info($"Auto Warhead Starting timers.");
             double interval = StartAfter * 60 * 1000 - Round.Duration.TotalMilliseconds;
             if (interval > 0) {
                 _warheadTimer.Interval = interval;
@@ -136,6 +159,21 @@ namespace AutoWarhead {
             if (interval > 0) {
                 _warningTimer.Interval = interval;
                 _warningTimer.Start();
+            }
+        }
+
+        [Event]
+        private static void OnPlayerDamage(PlayerDamageEvent ev, ValueContainer isAllowed) {
+            if (ev.DamageHandler is WarheadDamageHandler && ev.Target.Role is RoleTypeId.Scp079 &&
+               ((SCP079RegularSurvive && !_isDetonating) || (SCP079AutoSurvive && _isDetonating))) {
+                isAllowed.Value = false;
+            }
+        }
+
+        [Event]
+        private static void CameraChangeCheck(Scp079CameraChangedEvent ev, ValueContainer isAllowed) {
+            if (Warhead.IsDetonated && !(ev.Camera.Room.Zone is MapGeneration.FacilityZone.Surface)) {
+                isAllowed.Value = false;
             }
         }
 
@@ -170,27 +208,6 @@ namespace AutoWarhead {
             FLog.Info("Automatic Alpha Warhead stopped");
         }
 
-        public static void RestartPrepare() {
-            _isDetonating = false;
-            IsEnabled = DefaultEnabled;
-            if (IsEnabled) {
-                _warningTimer.Stop();
-                _warheadTimer.Stop();
-            }
-        }
-
-        private static void OnPlayerDamage(PlayerDamageEvent ev, ValueContainer val) {
-            if (ev.DamageHandler is WarheadDamageHandler && ev.Target.Role is RoleTypeId.Scp079 &&
-               ((SCP079RegularSurvive && !_isDetonating) || (SCP079AutoSurvive && _isDetonating))) {
-                val.Value = false;
-            }
-        }
-
-        private static void CameraChangeCheck(Scp079CameraChangedEvent ev, ValueContainer val) {
-            if (Warhead.IsDetonated && !(ev.Camera.Room.Zone is MapGeneration.FacilityZone.Surface)) {
-                val.Value = false;
-            }
-        }
 
         private static void AutoWarheadStartEvent(Object source, ElapsedEventArgs e) {
             if (StartAfter > Round.Duration.TotalMinutes + 0.02) return;

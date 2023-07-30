@@ -1,8 +1,6 @@
 ﻿using BetterCommands;
 using BetterCommands.Permissions;
 
-using Compendium.Extensions;
-using Compendium.Helpers.Calls;
 
 using PlayerRoles;
 
@@ -24,18 +22,6 @@ namespace AutoWarhead {
                 "Automatic Warhead enabled." :
                 "Automatic Warhead disabled.";
         }
-
-        /* CHANGE TIME - not supported
-        [Command("autowarheadtime", CommandType.RemoteAdmin, CommandType.GameConsole)]
-        [CommandAliases("autowtime", "autowt")]
-        [Description("Change time of Automatic Alpha Warhead (in minutes)")]
-        public static string AWtime(Player sender, float time) {
-            AutoWarheadLogic.StartAfter = time;
-            string ret = $"Automatic Warhead time set to {time} minutes.";
-            if (!AutoWarheadLogic.IsEnabled) ret += " BUT PLUGIN IS NOT ACTIVE!";
-            return ret;
-        }
-        */
 
         [Command("autowarheadstatus", CommandType.RemoteAdmin, CommandType.GameConsole)]
         [CommandAliases("autowstatus", "autows")]
